@@ -1,0 +1,5 @@
+numpy
+matplotlib
+pytest
+.pytest_cache/
+# pyrealsense2 is installed separately: see README (Jetson needs a special build)
