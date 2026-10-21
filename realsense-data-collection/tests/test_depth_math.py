@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from depth_math import depth_to_meters, center_patch_stats
+from depth_math import depth_to_meters, center_patch_stats, summarize_trial
 
 DEPTH_SCALE = 0.001  # 1 raw unit = 1 mm
 
@@ -37,3 +37,28 @@ def test_zeros_are_excluded_from_median():
     median_m, valid_frac = center_patch_stats(image, DEPTH_SCALE)
     assert median_m == pytest.approx(2.0)   # would be 0.0 if zeros were counted
     assert valid_frac == pytest.approx(6 / 21)
+
+
+def test_summarize_trial_basic_stats():
+    result = summarize_trial([1.0, 1.1, 0.9], [1.0, 1.0, 1.0], true_distance_m=1.0)
+    assert result["mean_m"] == pytest.approx(1.0)
+    assert result["median_m"] == pytest.approx(1.0)
+    assert result["error_m"] == pytest.approx(0.0)
+    assert result["n_frames_valid"] == 3
+
+
+def test_summarize_trial_error_sign():
+    result = summarize_trial([1.05, 1.05], [1.0, 1.0], true_distance_m=1.0)
+    assert result["error_m"] == pytest.approx(0.05)    # reads 5 cm too far
+
+
+def test_summarize_trial_counts_dropped_frames():
+    # 4 frames total, but only 2 had a valid reading
+    result = summarize_trial([1.0, 1.0], [1.0, 0.0, 1.0, 0.0], true_distance_m=1.0)
+    assert result["n_frames_total"] == 4
+    assert result["n_frames_valid"] == 2
+    assert result["mean_valid_fraction"] == pytest.approx(0.5)
+
+
+def test_summarize_trial_no_valid_frames_returns_none():
+    assert summarize_trial([], [0.0, 0.0], true_distance_m=1.0) is None
