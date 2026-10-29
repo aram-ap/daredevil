@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# macOS
+.DS_Store
+
+# KiCad
+*-backups/
+~*.lck
+fp-info-cache
+hardware/wrist_module/Library/*.zip
