@@ -25,8 +25,6 @@ TBD
 
 Hardware design files live in [`hardware/`](hardware/). All PCB work is done in **KiCad 10**. See the [hardware README](hardware/README.md) for full details.
 
-**Author:** Aram Aprahamian ([aapraham@ucsc.edu](mailto:aapraham@ucsc.edu))
-
 ```
 hardware/
 +-- README.md
@@ -39,6 +37,7 @@ hardware/
     |   +-- wrist_module.pdf       Schematic (PDF)
     |   +-- wrist_schematic.png    Schematic (PNG, made from the PDF)
     |   +-- wrist_module.png       Front render
+    |   +-- pcb_traces.png         PCB layout showing copper traces
     |   +-- wrist_module_back.png  Back render
     +-- Library/                   Third-party symbols and footprints
         +-- 113991054/             Seeed XIAO ESP32C3 symbol, footprint, and 3D model
@@ -49,9 +48,9 @@ hardware/
 
 The wrist module is a small battery-powered board worn on each wrist. It drives up to five vibration motors that signal the direction and type of nearby obstacles.
 
-| Schematic | PCB (front) |
-| --- | --- |
-| ![Wrist module schematic](hardware/wrist_module/Prints/wrist_schematic.png) | ![Wrist module PCB, front](hardware/wrist_module/Prints/wrist_module.png) |
+| Schematic | PCB (front) | PCB (traces) |
+| --- | --- | --- |
+| ![Wrist module schematic](hardware/wrist_module/Prints/wrist_schematic.png) | ![Wrist module PCB, front](hardware/wrist_module/Prints/wrist_module.png) | ![Wrist module PCB layout with traces](hardware/wrist_module/Prints/pcb_traces.png) |
 
 | Part | Purpose |
 | --- | --- |
