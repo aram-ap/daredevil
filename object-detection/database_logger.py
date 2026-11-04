@@ -13,7 +13,7 @@ def init_db(db_path=DB_NAME):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOTE EXISTS obstacle_logs (
+        CREATE TABLE IF NOT EXISTS obstacle_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp REAL NOT NULL,
             zone TEXT NOT NULL,

@@ -5,6 +5,7 @@ Dependencies: pyrealsense2, opencv-python, numpy, sqlite3
 """
 
 
+import os
 import time
 import sqlite3
 import numpy as np
@@ -12,14 +13,11 @@ import cv2
 from database_logger import init_db, log_obstacle_event
 
 
-# Check if the Intel RealSense Camera is plugged in
 try:
     import pyrealsense2 as rs
-    ctx = rs.context()
-    REALSENSE_AVAILABLE = (len(devices) > 0)
-except (ImportError, Exception):
+    REALSENSE_AVAILABLE = True
+except ImportError:
     REALSENSE_AVAILABLE = False
-
 
 # =======================================================================
 # Configuration & Constants
@@ -41,39 +39,6 @@ RIGHT_ZONE_START = int(FRAME_WIDTH * 0.67)
 # Mask the bottom 15% of screen to prevent the floor and cane from triggering detection
 CROP_BOTTOM_PERCENT = 0.15
 CROP_Y_END = int(FRAME_HEIGHT * (1.0 - CROP_BOTTOM_PERCENT))
-
-DB_NAME = "daredevil_object_log.db"
-
-
-# =======================================================================
-# Database Logging in SQLite 3
-# =======================================================================
-
-
-def init_db(db_path=DB_NAME):
-    # Initialize SQLite database table for recording obstacle events
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS obstacle_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp REAL NOT NULL,
-            zone TEXT NOT NULL,
-            nearest_distance_m REAL NOT NULL
-        )
-    ''')
-    conn.commit()
-    return conn
-
-
-def log_obstacle_event(conn, zone, distance_m):
-    # Logs the timestamp, zone, and distance readings from RealSense Camera to SQLitedatabase
-    cursor = conn.cursor()
-    cursor.execute(
-        'INSERT INTO obstacle_logs (timestamp, zone, nearest_distance_m) VALUES (?, ?, ?)',
-        (time.time(), zone, float(distance_m))
-    )
-    conn.commit()
 
 
 # =======================================================================
@@ -173,7 +138,6 @@ def main():
             cv2.line(depth_colormap, (LEFT_ZONE_END, 0), (LEFT_ZONE_END, FRAME_HEIGHT), (255,255,255),2)
             cv2.line(depth_colormap, (RIGHT_ZONE_START, 0), (RIGHT_ZONE_START, FRAME_HEIGHT), (255,255,255),2)
             cv2.line(depth_colormap, (0, CROP_Y_END), (FRAME_WIDTH, CROP_Y_END), (0,0,255), 1)
-            cv2.imshow("Project Daredevil - Depth Tracking", depth_colormap)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
             
