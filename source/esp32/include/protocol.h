@@ -16,6 +16,7 @@ constexpr uint8_t SYNC0 = 0xAA;
 constexpr uint8_t SYNC1 = 0x55;
 constexpr uint8_t MAX_PAYLOAD = 16;
 constexpr size_t MAX_FRAME = 5 + MAX_PAYLOAD + 1;
+constexpr uint8_t NUM_MOTORS = 4;  // SET_MOTORS carries exactly this many bytes
 
 // Jetson -> ESP32
 constexpr uint8_t MSG_SET_MOTORS = 0x01;  // payload: NUM_MOTORS intensities
@@ -105,6 +106,13 @@ class Parser {
       }
     }
     return false;
+  }
+
+  // Forget any half-received frame. Used between UDP datagrams, where one
+  // datagram is one frame and a truncated one must not run into the next.
+  void reset() {
+    state_ = WAIT_SYNC0;
+    index_ = 0;
   }
 
   Frame frame{};

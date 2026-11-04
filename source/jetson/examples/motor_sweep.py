@@ -19,7 +19,7 @@ def main() -> None:
         print("No bracelets found on /dev/ttyACM*")
         return
     for side, b in bracelets.items():
-        print(f"{side}: {b.port} fw {b.identity.fw_version}, {b.identity.num_motors} motors")
+        print(f"{side}: {b.transport!r} fw {b.identity.fw_version}, {b.identity.num_motors} motors")
 
     acks = 0
     try:
