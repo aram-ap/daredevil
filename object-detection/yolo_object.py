@@ -9,11 +9,44 @@ logic (Left / Center / Right) is preserved and computed from the
 nearest detected object in each zone.
 """
 
+from database_logger import init_db, log_yolo_event
+from flask import Flask, Response
+import threading
 import time
 import numpy as np
 import cv2
 
-from database_logger import init_db, log_yolo_event
+
+app = Flask(__name__)
+latest_frame = None
+frame_lock = threading.Lock()
+
+def generate_mjpeg():
+    global latest_frame
+    while True:
+        with frame_lock:
+            if latest_frame is None:
+                continue
+            # Encode frame as JPEG (quality 80 balances speed & clarity)
+            ret, buffer = cv2.imencode('.jpg', latest_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if not ret:
+                continue
+            frame_bytes = buffer.tobytes()
+
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+@app.route('/')
+def video_feed():
+    return Response(generate_mjpeg(), mimtype='multipart/x-mixed-replace; boundary=frame')
+
+def start_web_server(port=5000):
+    # Run Flask in a daemon thread so it exits automatically when the main script stops
+    server_thread = threading.Thread(
+        target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False),
+        daemon=True
+    )
+    server_thread.start()
 
 try:
     import pyrealsense2 as rs
