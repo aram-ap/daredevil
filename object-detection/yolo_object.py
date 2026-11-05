@@ -328,11 +328,16 @@ def main():
             # -----------------------------------------------------------------
             # 6. Live view window
             # -----------------------------------------------------------------
-            annotated = draw_overlay(color_image, detections, zone_motors)
-            cv2.imshow("Daredevil — YOLO + Depth", annotated)
+            annotated_frame = draw_overlay(color_image, detections, zone_motors)
+            
+            start_web_server(port=5000)
+            print("[INFO] Web stream live at http://<jetson-ip>:5000")
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            with frame_lock:
+                latest_frame = annotated_frame.copy()
+
+
+            
 
     except KeyboardInterrupt:
         print("\n[INFO] Pipeline interrupted by user.")
