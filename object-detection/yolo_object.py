@@ -28,7 +28,6 @@ def generate_mjpeg():
             if latest_frame is None:
                 frame_bytes = None
             else:
-                # Encode frame as JPEG (quality 80 balances speed & clarity)
                 ret, buffer = cv2.imencode('.jpg', latest_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
                 frame_bytes = buffer.tobytes() if ret else None
 
@@ -37,17 +36,31 @@ def generate_mjpeg():
             continue
 
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.03)  # Cap stream push to ~30 FPS
+               b'Content-Type: image/jpeg\r\n'
+               b'Content-Length: ' + f"{len(frame_bytes)}".encode() + b'\r\n\r\n' +
+               frame_bytes + b'\r\n')
+        time.sleep(0.03)
 
 @app.route('/')
+def index():
+    # Wrapping the MJPEG stream in an <img> tag stops Chrome from buffering/hanging
+    return """
+    <html>
+      <head><title>Project Daredevil Live View</title></head>
+      <body style="background:#111; color:#eee; text-align:center; font-family:sans-serif; margin:0; padding:20px;">
+        <h3>Project Daredevil — YOLO + Depth Stream</h3>
+        <img src="/video_feed" style="max-width:95%; border:2px solid #444; border-radius:8px;" />
+      </body>
+    </html>
+    """
+
+@app.route('/video_feed')
 def video_feed():
     return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def start_web_server(port=8080):
-    # Run Flask in a daemon thread so it exits automatically when the main script stops
     server_thread = threading.Thread(
-        target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False),
+        target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True),
         daemon=True
     )
     server_thread.start()
