@@ -43,6 +43,8 @@ import numpy as np
 SCHEMES = {0: "Jet", 1: "Classic", 2: "WhiteToBlack", 3: "BlackToWhite",
            4: "Bio", 5: "Cold", 6: "Warm", 7: "Quantized", 8: "Pattern", 9: "Hue"}
 
+# The whole web page is this one string: a browser <img> pointed at /stream. The
+# browser itself decodes the MJPEG stream, so no JavaScript or web framework is needed.
 PAGE = b"""<!doctype html><html><head><meta charset="utf-8">
 <title>Daredevil depth heatmap</title>
 <style>body{margin:0;background:#111;color:#ccc;font:14px system-ui;text-align:center}
@@ -53,7 +55,12 @@ img{max-width:100%;height:auto;margin-top:8px;image-rendering:pixelated}</style>
 
 
 class Latest:
-    """Thread-safe holder for the newest JPEG so HTTP handlers can read it."""
+    """Thread-safe holder for the newest JPEG so HTTP handlers can read it.
+
+    The capture thread calls put(); each browser connection calls wait_next().
+    Only the NEWEST frame is kept, so a slow viewer skips frames instead of
+    building up a backlog (and never slows down the camera loop).
+    """
 
     def __init__(self):
         self.cond = threading.Condition()
@@ -61,12 +68,15 @@ class Latest:
         self.seq = 0
 
     def put(self, jpeg):
+        """Store a new frame and wake every browser connection waiting for one."""
         with self.cond:
             self.jpeg = jpeg
             self.seq += 1
             self.cond.notify_all()
 
     def wait_next(self, last_seq, timeout=5.0):
+        """Block until a frame newer than last_seq exists (or timeout); return (jpeg, seq).
+        Pass last_seq=-1 to get the current frame as soon as there is one."""
         with self.cond:
             self.cond.wait_for(lambda: self.seq != last_seq, timeout)
             return self.jpeg, self.seq
@@ -85,6 +95,12 @@ def annotate(img, dist_m):
 
 
 def capture_realsense(args, latest, stop):
+    """Camera loop (runs in the worker thread): depth frame -> heatmap -> JPEG -> Latest.
+
+    The colorizer here is only for DISPLAY. If you add detection (zones, floor
+    masks), read the raw z16 values from `depth` BEFORE colorizing; do not
+    threshold the colored image.
+    """
     import pyrealsense2 as rs  # imported here so --demo works without it
 
     pipe, cfg = rs.pipeline(), rs.config()
@@ -121,9 +137,12 @@ def capture_realsense(args, latest, stop):
             depth = frames.get_depth_frame()
             if not depth:
                 continue
+            # Read the center distance BEFORE the filters run so the number on screen is
+            # the camera's real reading, not a smoothed or hole-filled one. 0.0 means "no reading".
             dist = depth.get_distance(depth.get_width() // 2, depth.get_height() // 2)
             for f in filters:
                 depth = f.process(depth)
+            # .copy(): the SDK owns that buffer and reuses it; we draw on the image next.
             img = np.asanyarray(colorizer.colorize(depth).get_data()).copy()
             annotate(img, dist)
             ok, jpg = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, args.quality])
@@ -157,6 +176,11 @@ def capture_demo(args, latest, stop):
 
 
 def make_handler(latest):
+    """Build the HTTP request handler (a closure so it can see `latest`).
+
+    Routes: /  the page, /stream  MJPEG (a never-ending multipart response; the
+    browser swaps in each JPEG as it arrives), /snapshot.jpg  one frame.
+    """
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
@@ -200,6 +224,11 @@ def make_handler(latest):
 
 
 def main():
+    """Parse options, start the capture thread, then serve HTTP until Ctrl+C.
+
+    Threads: main = HTTP server (one extra thread per browser tab),
+    worker = camera loop. They only talk through `latest`.
+    """
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--port", type=int, default=8085)
     p.add_argument("--host", default="127.0.0.1",
@@ -231,6 +260,7 @@ def main():
             print("\nCapture stopped, shutting down.", file=sys.stderr, flush=True)
             os._exit(1)
 
+    # daemon=True so a crash in the server never leaves the process hanging on the camera thread.
     worker = threading.Thread(target=run_capture, daemon=True)
     worker.start()
 

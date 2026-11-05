@@ -70,3 +70,36 @@ Endpoints: `/` page, `/stream` MJPEG, `/snapshot.jpg` single frame.
 - *Black or blank image*: point at something 0.3 m or farther; the D435i has a
   minimum range.
 - *Laggy*: lower `--quality` (e.g. 50) or `--fps 15`.
+
+## How it works
+```
+ Jetson                                                   Your laptop
+ D435i --USB--> depth_stream.py                           browser: http://localhost:8085
+                 capture thread: depth -> colorize -> JPEG        ^
+                 HTTP server on 127.0.0.1:8085  --- SSH tunnel ---+
+```
+- Nothing listens on the network: the server binds to `127.0.0.1` and the SSH `-L` tunnel
+  carries the port to your laptop. That is why no password or firewall setup is needed.
+- One thread owns the camera and keeps only the newest JPEG; the web server hands that to
+  every open tab. A slow connection drops frames instead of slowing the camera.
+- It is MJPEG (a stream of JPEGs) on purpose: a browser plays it with a plain `<img>` tag,
+  so no Flask, JavaScript or video codec is needed.
+
+## Files
+| File | Runs on | Purpose |
+|---|---|---|
+| `depth_stream.py` | Jetson | The streamer: camera (or `--demo`), heatmap, HTTP server |
+| `connect.sh` | Laptop | One command: copies the scripts, starts the stream over SSH, opens the tunnel and your browser |
+| `launch.sh` | Jetson | Finds a Python that can `import pyrealsense2` (your venv) and starts `depth_stream.py` |
+| `requirements.txt` | | numpy and OpenCV; `pyrealsense2` is separate (see Requirements) |
+| `.gitignore` | | Keeps `.venv/`, `__pycache__/` and `*.pyc` out of git. These are generated per machine, are large, and break on other computers |
+
+## Building on this (slices and partitions)
+Draw the zone boundaries and per-zone distances on the image in `annotate()` in
+`depth_stream.py`; it already receives each frame and draws the center crosshair. Compute
+zone values from the raw depth (see the comment in `capture_realsense`), then pass them in.
+That gives a live view of what `depth-zones/` computes.
+
+## Status
+Camera path viewed in a browser over SSH on the Jetson (Nov 4). Not covered by automated
+tests; `--demo` is the no-hardware check.
