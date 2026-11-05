@@ -18,47 +18,63 @@ import cv2
 
 
 app = Flask(__name__)
-latest_frame = None
+latest_jpeg = None
 frame_lock = threading.Lock()
-
-def generate_mjpeg():
-    global latest_frame
-    while True:
-        with frame_lock:
-            if latest_frame is None:
-                frame_bytes = None
-            else:
-                ret, buffer = cv2.imencode('.jpg', latest_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                frame_bytes = buffer.tobytes() if ret else None
-
-        if frame_bytes is None:
-            time.sleep(0.01)
-            continue
-
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n'
-               b'Content-Length: ' + f"{len(frame_bytes)}".encode() + b'\r\n\r\n' +
-               frame_bytes + b'\r\n')
-        time.sleep(0.03)
 
 @app.route('/')
 def index():
-    # Wrapping the MJPEG stream in an <img> tag stops Chrome from buffering/hanging
     return """
     <html>
       <head><title>Project Daredevil Live View</title></head>
       <body style="background:#111; color:#eee; text-align:center; font-family:sans-serif; margin:0; padding:20px;">
         <h3>Project Daredevil — YOLO + Depth Stream</h3>
-        <img src="/video_feed" style="max-width:95%; border:2px solid #444; border-radius:8px;" />
+        <p id="status" style="color:#aaa; font-size:14px;">Waiting for first camera frame...</p>
+        <img id="stream" style="max-width:95%; border:2px solid #444; border-radius:8px; display:none;" />
+        <script>
+          const img = document.getElementById('stream');
+          const status = document.getElementById('status');
+          let frames = 0, lastTime = performance.now();
+
+          function loadNextFrame() {
+            img.src = '/frame.jpg?t=' + performance.now();
+          }
+
+          img.onload = () => {
+            img.style.display = 'inline-block';
+            frames++;
+            const now = performance.now();
+            if (now - lastTime >= 1000) {
+              status.innerText = 'Live Stream Active — ' + frames + ' FPS';
+              status.style.color = '#4caf50';
+              frames = 0;
+              lastTime = now;
+            }
+            setTimeout(loadNextFrame, 15);
+          };
+
+          img.onerror = () => {
+            setTimeout(loadNextFrame, 200);
+          };
+
+          loadNextFrame();
+        </script>
       </body>
     </html>
     """
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/frame.jpg')
+def get_frame():
+    with frame_lock:
+        if latest_jpeg is None:
+            return Response(status=204)
+        data = latest_jpeg
+    resp = Response(data, mimetype='image/jpeg')
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
 
 def start_web_server(port=8080):
+    import logging
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)  # Keep terminal output clean!
     server_thread = threading.Thread(
         target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True),
         daemon=True
@@ -350,10 +366,12 @@ def main():
             # 6. Update Web Stream Frame
             # -----------------------------------------------------------------
             annotated_frame = draw_overlay(color_image, detections, zone_motors)
-
-            with frame_lock:
-                latest_frame = annotated_frame.copy()
-
+            ret, buffer = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            if ret:
+                with frame_lock:
+                    global latest_jpeg
+                    latest_jpeg = buffer.tobytes()
+    
     except KeyboardInterrupt:
         print("\n[INFO] Pipeline interrupted by user.")
     finally:
