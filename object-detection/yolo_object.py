@@ -1,10 +1,10 @@
 """
 Project Daredevil - YOLO Object Detection + Depth Pipeline
 Target Platform : NVIDIA Jetson Orin Nano + Intel RealSense D435i
-Dependencies    : pyrealsense2, opencv-python, numpy, ultralytics, sqlite3
+Dependencies    : pyrealsense2, opencv-python, numpy, ultralytics, sqlite3, flask
 
 Live view: color camera feed with YOLOv8 bounding boxes and per-box
-depth readings drawn directly on the frame.  Zone-based haptic motor
+depth readings drawn directly on the frame. Zone-based haptic motor
 logic (Left / Center / Right) is preserved and computed from the
 nearest detected object in each zone.
 """
@@ -26,21 +26,25 @@ def generate_mjpeg():
     while True:
         with frame_lock:
             if latest_frame is None:
-                continue
-            # Encode frame as JPEG (quality 80 balances speed & clarity)
-            ret, buffer = cv2.imencode('.jpg', latest_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            if not ret:
-                continue
-            frame_bytes = buffer.tobytes()
+                frame_bytes = None
+            else:
+                # Encode frame as JPEG (quality 80 balances speed & clarity)
+                ret, buffer = cv2.imencode('.jpg', latest_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                frame_bytes = buffer.tobytes() if ret else None
+
+        if frame_bytes is None:
+            time.sleep(0.01)
+            continue
 
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.03)  # Cap stream push to ~30 FPS
 
 @app.route('/')
 def video_feed():
-    return Response(generate_mjpeg(), mimtype='multipart/x-mixed-replace; boundary=frame')
+    return Response(generate_mjpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-def start_web_server(port=5000):
+def start_web_server(port=8080):
     # Run Flask in a daemon thread so it exits automatically when the main script stops
     server_thread = threading.Thread(
         target=lambda: app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False),
@@ -70,6 +74,7 @@ except ImportError:
 FRAME_WIDTH  = 640
 FRAME_HEIGHT = 480
 FPS          = 30
+WEB_PORT     = 8080
 
 # YOLO model weights: 'yolov8n.pt' (nano/fastest) → 'yolov8s/m/l/x.pt' for more accuracy
 YOLO_MODEL_WEIGHTS = "yolov8n.pt"
@@ -119,7 +124,7 @@ def get_zone(cx: int) -> str:
 def sample_depth_at_box(depth_m: np.ndarray, x1: int, y1: int, x2: int, y2: int) -> float | None:
     """
     Return the median valid depth (m) inside the bounding box, or None if no
-    valid pixels exist.  Uses the centre patch rather than the whole box to
+    valid pixels exist. Uses the centre patch rather than the whole box to
     reduce edge-noise near object boundaries.
     """
     cx = (x1 + x2) // 2
@@ -218,8 +223,8 @@ def main():
 
     # --- Initialise RealSense (or fall back to webcam) ---
     if REALSENSE_AVAILABLE:
-        pipeline   = rs.pipeline()
-        rs_config  = rs.config()
+        pipeline  = rs.pipeline()
+        rs_config = rs.config()
         rs_config.enable_stream(rs.stream.color, FRAME_WIDTH, FRAME_HEIGHT, rs.format.bgr8, FPS)
         rs_config.enable_stream(rs.stream.depth, FRAME_WIDTH, FRAME_HEIGHT, rs.format.z16,  FPS)
 
@@ -235,7 +240,10 @@ def main():
         depth_scale = None
         print("[INFO]  Using webcam — no real depth data available.")
 
-    print("[INFO]  Press 'q' to quit.")
+    # --- Start Web Server ONCE before the loop ---
+    start_web_server(port=WEB_PORT)
+    print(f"[INFO]  Web stream live at http://<jetson-ip>:{WEB_PORT}")
+    print("[INFO]  Press Ctrl+C to quit.")
     print("-" * 60)
 
     try:
@@ -244,10 +252,10 @@ def main():
             # 1. Grab frames
             # -----------------------------------------------------------------
             if REALSENSE_AVAILABLE:
-                frames        = pipeline.wait_for_frames()
-                aligned       = align.process(frames)
-                color_frame   = aligned.get_color_frame()
-                depth_frame   = aligned.get_depth_frame()
+                frames      = pipeline.wait_for_frames()
+                aligned     = align.process(frames)
+                color_frame = aligned.get_color_frame()
+                depth_frame = aligned.get_depth_frame()
 
                 if not color_frame or not depth_frame:
                     continue
@@ -326,18 +334,12 @@ def main():
             )
 
             # -----------------------------------------------------------------
-            # 6. Live view window
+            # 6. Update Web Stream Frame
             # -----------------------------------------------------------------
             annotated_frame = draw_overlay(color_image, detections, zone_motors)
-            
-            start_web_server(port=5000)
-            print("[INFO] Web stream live at http://<jetson-ip>:5000")
 
             with frame_lock:
                 latest_frame = annotated_frame.copy()
-
-
-            
 
     except KeyboardInterrupt:
         print("\n[INFO] Pipeline interrupted by user.")
@@ -347,10 +349,8 @@ def main():
         else:
             cap.release()
         conn.close()
-        cv2.destroyAllWindows()
         print("[INFO] Shutdown complete.")
 
 
 if __name__ == "__main__":
     main()
-
