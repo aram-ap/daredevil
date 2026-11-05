@@ -348,19 +348,20 @@ def main():
                 zone_motors[zone] = calculate_vibration_intensity(nearest)
 
             # -----------------------------------------------------------------
-            # 5. Terminal readout
+            # 5. Terminal readout ( only logs when # of objects >= 1 )
             # -----------------------------------------------------------------
-            obj_summary = ", ".join(
-                f"{d['label']}({d['zone']}, {d['depth_m']:.2f}m)"
-                if d["depth_m"] else f"{d['label']}({d['zone']}, --)"
-                for d in detections
-            ) or "none"
-            print(
-                f"[DETECT] {obj_summary} | "
-                f"Motors → L:{zone_motors.get('Left',0)} "
-                f"C:{zone_motors.get('Center',0)} "
-                f"R:{zone_motors.get('Right',0)}"
-            )
+            if detections:    
+                obj_summary = ", ".join(
+                    f"{d['label']}({d['zone']}, {d['depth_m']:.2f}m)"
+                    if d["depth_m"] else f"{d['label']}({d['zone']}, --)"
+                    for d in detections
+                ) or "none"
+                print(
+                    f"[DETECT] {obj_summary} | "
+                    f"Motors → L:{zone_motors.get('Left',0)} "
+                    f"C:{zone_motors.get('Center',0)} "
+                    f"R:{zone_motors.get('Right',0)}"
+                )
 
             # -----------------------------------------------------------------
             # 6. Update Web Stream Frame
