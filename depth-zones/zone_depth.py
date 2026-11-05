@@ -145,21 +145,25 @@ class BodyFilter:
         self._filled = 0                          # slots holding real frames
 
     def update(self, depth_m: np.ndarray) -> None:
-        if self._hi is None or self._hi.shape[1:] != depth_m.shape:
+        if self._hi is None or self._lo is None or self._near is None \
+                or self._hi.shape[1:] != depth_m.shape:
             shape = (self.n_frames,) + depth_m.shape
             self._hi = np.full(shape, -np.inf, np.float32)
             self._lo = np.full(shape, np.inf, np.float32)
             self._near = np.zeros(shape, bool)
             self._i = 0
             self._filled = 0
+        # Local names so type checkers know the buffers exist from here on.
+        hi, lo, near_buf = self._hi, self._lo, self._near
+        assert hi is not None and lo is not None and near_buf is not None
         with np.errstate(invalid="ignore"):
             near = depth_m < self.near_max_m          # NaN -> False
-        self._near[self._i] = near
+        near_buf[self._i] = near
         # Write "depth where near, else +/-inf" straight into the slot, no temporaries.
-        self._hi[self._i] = -np.inf
-        np.copyto(self._hi[self._i], depth_m, where=near)
-        self._lo[self._i] = np.inf
-        np.copyto(self._lo[self._i], depth_m, where=near)
+        hi[self._i] = -np.inf
+        np.copyto(hi[self._i], depth_m, where=near)
+        lo[self._i] = np.inf
+        np.copyto(lo[self._i], depth_m, where=near)
         self._i = (self._i + 1) % self.n_frames
         self._filled = min(self._filled + 1, self.n_frames)
 
@@ -167,7 +171,7 @@ class BodyFilter:
         """Boolean mask, same shape as the frames. All False until the window fills
         (so for the first n_frames frames nothing is filtered: a held cane may
         flicker an alert right after start-up)."""
-        if self._hi is None:
+        if self._hi is None or self._lo is None or self._near is None:
             return np.zeros((0, 0), bool)
         if self._filled < self.n_frames:
             return np.zeros(self._hi.shape[1:], bool)

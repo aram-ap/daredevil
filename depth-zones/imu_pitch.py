@@ -63,8 +63,10 @@ class PitchEstimator:
             self._g = (ax, ay, az)
         else:
             a = self.alpha
-            self._g = tuple((1 - a) * old + a * new
-                            for old, new in zip(self._g, (ax, ay, az)))
+            gx, gy, gz = self._g
+            self._g = ((1 - a) * gx + a * ax,
+                       (1 - a) * gy + a * ay,
+                       (1 - a) * gz + a * az)
         return self.pitch
 
     @property

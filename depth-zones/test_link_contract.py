@@ -16,8 +16,8 @@ if not (JETSON / "daredevil_link").is_dir():
     pytest.skip("source/jetson not found next to depth-zones/", allow_module_level=True)
 sys.path.insert(0, str(JETSON))
 
-from daredevil_link import protocol as p  # noqa: E402
-from daredevil_link.bracelet import Bracelet, Identity  # noqa: E402
+from daredevil_link import protocol as p  # type: ignore[import-not-found]  # noqa: E402
+from daredevil_link.bracelet import Bracelet, Identity  # type: ignore[import-not-found]  # noqa: E402
 
 import haptic_map as hm  # noqa: E402
 

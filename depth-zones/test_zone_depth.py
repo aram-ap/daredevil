@@ -196,7 +196,7 @@ def test_hand_that_starts_moving_is_released():
     for f in hand_frames(12, rng):
         det.process(to_raw(f), PITCH)
     base = floor_frame_m()
-    zones = None
+    zones: dict = {}
     for i in range(10):                                   # now sweeps 0.7 -> 0.52 m
         zones = det.process(to_raw(add_box(base, (400, 470), (50, 150), 0.7 - 0.02 * i)), PITCH)
     assert zones["Left"] is not None
@@ -205,7 +205,7 @@ def test_hand_that_starts_moving_is_released():
 def test_approaching_near_obstacle_is_not_ignored():
     det = make_detector(n_frames=10, near_max_m=1.2)
     base = floor_frame_m()
-    last = None
+    last: dict = {}
     for i in range(10):
         z = 1.1 - 0.05 * i                                # closing in at 0.05 m/frame
         last = det.process(to_raw(add_box(base, (120, 300), (280, 360), z)), PITCH)
@@ -215,6 +215,7 @@ def test_approaching_near_obstacle_is_not_ignored():
 def test_far_static_object_not_treated_as_body():
     det = make_detector(n_frames=10)
     base = add_box(floor_frame_m(), (120, 300), (280, 360), 2.0)
+    zones: dict = {}
     for _ in range(12):
         zones = det.process(to_raw(base), PITCH)
     assert zones["Center"] == pytest.approx(2.0, abs=0.02)   # static but beyond near_max_m
@@ -225,7 +226,8 @@ def test_ring_buffer_wraps_without_growing():
     raw = to_raw(floor_frame_m())
     for _ in range(3):
         det.process(raw, PITCH)
+    assert det.body._hi is not None
     shape = det.body._hi.shape
     for _ in range(50):
         det.process(raw, PITCH)
-    assert det.body._hi.shape == shape == (4, H, W)
+    assert det.body._hi is not None and det.body._hi.shape == shape == (4, H, W)
