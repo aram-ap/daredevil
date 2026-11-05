@@ -1,0 +1,5 @@
+# Vision / haptics code in this folder. numpy + pytest are all the tests need.
+# On the Jetson use the cv2 that ships with JetPack (apt python3-opencv); do not pip-install opencv-python over it.
+numpy
+opencv-python
+pytest
