@@ -23,11 +23,17 @@ TBD
 
 #### Hardware
 
-Hardware design files live in [`hardware/`](hardware/). All PCB work is done in **KiCad 10**. See the [hardware README](hardware/README.md) for full details.
+Hardware design files live in [`hardware/`](hardware/). All PCB work is done in **KiCad 10**, and enclosures are modeled in **Autodesk Fusion**. See the [hardware README](hardware/README.md) for full details.
 
 ```
 hardware/
 +-- README.md
++-- models/                        3D models for enclosures
+|   +-- Wrist Module/
+|       +-- Wrist_Module_Enclosure.f3z    Fusion archive (editable source)
+|       +-- Wrist Module Enclosure.3mf    Print-ready model (open in a slicer)
+|       +-- enclosure.png                 Assembled render
+|       +-- enclosure_exploded.png        Exploded render
 +-- wrist_module/                  KiCad project for the wrist haptic board
     +-- wrist_module.kicad_pro     Project file (open this in KiCad)
     +-- wrist_module.kicad_sch     Schematic
@@ -63,3 +69,9 @@ The wrist module is a small battery-powered board worn on each wrist. It drives 
 | PWR LED | Power indicator |
 
 To open the project, open `hardware/wrist_module/wrist_module.kicad_pro` in KiCad 10. If symbols or footprints show as missing, add the libraries under `hardware/wrist_module/Library/` in **Preferences -> Manage Symbol/Footprint Libraries** (as project-specific libraries).
+
+The board is housed in a two-part 3D-printed enclosure (base and lid, fastened with four cap screws that also hold the PCB). The lid has openings for the push button and power LED, and the base has side cutouts for the connectors and switch. The editable Fusion source (`.f3z`) and a print-ready `.3mf` are in [`hardware/models/Wrist Module/`](hardware/models/Wrist%20Module/).
+
+| Enclosure (assembled) | Enclosure (exploded) |
+| --- | --- |
+| ![Wrist module enclosure, assembled](hardware/models/Wrist%20Module/enclosure.png) | ![Wrist module enclosure, exploded with PCB](hardware/models/Wrist%20Module/enclosure_exploded.png) |

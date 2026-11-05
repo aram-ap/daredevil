@@ -2,7 +2,7 @@
 
 Hardware design files for **DareDevil**, a wearable obstacle-detection system for the visually impaired. A depth camera and an NVIDIA Jetson Orin Nano detect obstacles, and a module on each wrist gives haptic feedback through vibration motors. See the [project README](../README.md) for the full overview.
 
-All PCB work here is done in **KiCad 10**.
+All PCB work here is done in **KiCad 10**. Enclosures are modeled in **Autodesk Fusion** and exported for 3D printing.
 
 **Author:** Aram Aprahamian ([aapraham@ucsc.edu](mailto:aapraham@ucsc.edu))
 
@@ -11,6 +11,12 @@ All PCB work here is done in **KiCad 10**.
 ```
 hardware/
 ├── README.md
+├── models/                        3D models for enclosures
+│   └── Wrist Module/
+│       ├── Wrist_Module_Enclosure.f3z    Fusion archive (editable source)
+│       ├── Wrist Module Enclosure.3mf    Print-ready model (open in a slicer)
+│       ├── enclosure.png                 Assembled render
+│       └── enclosure_exploded.png        Exploded render
 └── wrist_module/                  KiCad project for the wrist haptic board
     ├── wrist_module.kicad_pro     Project file (open this in KiCad)
     ├── wrist_module.kicad_sch     Schematic
@@ -47,6 +53,17 @@ Main parts:
 | TOGG BTN | User push button |
 | PWR LED | Power indicator |
 
+### Enclosure
+
+The board sits in a two-part 3D-printed enclosure: an open base and a flat lid, fastened together with four socket-head cap screws that also hold the PCB in place. The lid has openings for the push button (TOGG BTN) and the power LED, and the base has side cutouts for the board's connectors and switch.
+
+| Assembled | Exploded |
+| --- | --- |
+| ![Wrist module enclosure, assembled](models/Wrist%20Module/enclosure.png) | ![Wrist module enclosure, exploded with PCB](models/Wrist%20Module/enclosure_exploded.png) |
+
+- `models/Wrist Module/Wrist_Module_Enclosure.f3z`: editable source. Open it in Fusion with **File -> Open -> Open from my computer**.
+- `models/Wrist Module/Wrist Module Enclosure.3mf`: print-ready model. Load it into a slicer (Bambu Studio, PrusaSlicer, Cura, etc.).
+
 ### Opening the project
 
 1. Open `wrist_module/wrist_module.kicad_pro` in KiCad 10.
@@ -54,6 +71,6 @@ Main parts:
 
 ### Notes
 
-- Everything in `Prints/` is exported from KiCad. Re-export them after changing the schematic or layout so they stay current.
+- Everything in `Prints/` is exported from KiCad, and the enclosure renders and `.3mf` are exported from Fusion. Re-export them after changing the design so they stay current.
 - To regenerate the schematic PNG from the PDF (needs ImageMagick and Ghostscript):
   `magick -density 300 wrist_module/Prints/wrist_module.pdf -background white -alpha remove -alpha off wrist_module/Prints/wrist_schematic.png`
