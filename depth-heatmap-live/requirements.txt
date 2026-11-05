@@ -1,0 +1,3 @@
+numpy
+opencv-python-headless
+# pyrealsense2 is installed separately (Jetson needs a special build): see README
