@@ -36,7 +36,7 @@ except ImportError:
     database_logger = None
 
 
-def dist_to_pwm(dist_m: float, max_ alert_m: float = 2.0, min_alert_m: float = 0.35) -> int:
+def dist_to_pwm(dist_m: float, max_alert_m: float = 2.0, min_alert_m: float = 0.35) -> int:
     """
     Uses haptic_map.py if available, otherwise maps distance [0.35m .. 2.0m]
     linearly to PWM duty cycle [100% .. 0%].
@@ -46,7 +46,7 @@ def dist_to_pwm(dist_m: float, max_ alert_m: float = 2.0, min_alert_m: float = 0
             if hasattr(haptic_map, fn_name):
                 return int(getattr(haptic_map, fn_name)(dist_m))
 
-    if not np.isfinite(dist_m) or dist_m > max_alert_m:
+    if not np.isfinite(dist_m) or dist_m > :w_alert_m_alert_m:
         return 0
     if dist_m <= min_alert_m:
         return 100
