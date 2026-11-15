@@ -29,6 +29,7 @@ MAX_PAYLOAD = 16
 MSG_SET_MOTORS = 0x01  # payload: NUM_MOTORS bytes, intensity 0..255 each
 MSG_HEARTBEAT = 0x02  # payload: none; keeps the link watchdog alive
 MSG_IDENTIFY = 0x03  # payload: none; bracelet answers with MSG_IDENTITY
+MSG_PLAY_PATTERN = 0x04  # payload: [pattern_id]; bracelet plays a built-in pattern
 
 # ESP32 -> Jetson
 MSG_ACK = 0x81  # seq = echoed seq; payload: [acked_type, status]
@@ -38,11 +39,20 @@ MSG_IDENTITY = 0x83  # payload: [side, fw_major, fw_minor, num_motors]
 STATUS_OK = 0x00
 STATUS_BAD_LENGTH = 0x01
 STATUS_UNKNOWN_TYPE = 0x02
+STATUS_BAD_ARGUMENT = 0x03  # e.g. an unknown pattern id
 
 SIDE_LEFT = 0
 SIDE_RIGHT = 1
 
 NUM_MOTORS = 4
+
+# Built-in vibration patterns for MSG_PLAY_PATTERN. The patterns themselves
+# (steps, strengths, timings) live in source/esp32/include/patterns.h; these
+# ids must match its Id enum.
+PATTERN_BOOT = 0
+PATTERN_LINK_LOST = 1
+PATTERN_LOW_BATTERY = 2
+PATTERNS = {"boot": PATTERN_BOOT, "link_lost": PATTERN_LINK_LOST, "low_battery": PATTERN_LOW_BATTERY}
 
 
 def crc8(data: bytes) -> int:

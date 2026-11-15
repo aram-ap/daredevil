@@ -1,15 +1,21 @@
 // Daredevil bracelet firmware: receive motor commands from the Jetson over
 // Wi-Fi (UDP) or USB serial, drive the vibration motors with PWM, and fail safe
-// (motors off) if the link goes quiet. The decisions live in controller.h and
-// announcer.h; this file only connects them to the hardware.
+// (motors off) if the link goes quiet. Event patterns (boot, link lost, low
+// battery, or requested with PLAY_PATTERN) override the Jetson while they play.
+// The decisions live in the headers (controller, announcer, pattern_player,
+// battery_monitor, output); this file only connects them to the hardware.
 
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 
 #include "announcer.h"
+#include "battery_monitor.h"
 #include "config.h"
 #include "controller.h"
+#include "output.h"
+#include "pattern_player.h"
+#include "patterns.h"
 #include "protocol.h"
 
 #if __has_include("secrets.h")
@@ -20,6 +26,9 @@
 
 static Controller controller(BRACELET_SIDE, FW_VERSION_MAJOR, FW_VERSION_MINOR);
 static Announcer announcer(ANNOUNCE_PERIOD_MS, Controller::DEFAULT_LINK_TIMEOUT_MS);
+static PatternPlayer player;
+static BatteryMonitor battery(BATTERY_LOW_MV, BATTERY_CLEAR_MV);
+static uint32_t lastBatteryCheckMs = 0;
 
 // One parser per link: bytes from USB and Wi-Fi must never mix mid-frame.
 static proto::Parser usbParser;
@@ -43,15 +52,36 @@ static void motorsBegin() {
   }
 }
 
-// Write the controller's duties to the PWM outputs.
+// Write what each motor should do now to the PWM outputs: a playing pattern,
+// otherwise the Jetson's command (see output.h). Runs every loop, because a
+// pattern changes with time; only pins whose value changed are written.
 static void applyDuties() {
+  static uint8_t written[proto::NUM_MOTORS];
+  static bool anyWritten = false;
   for (uint8_t i = 0; i < proto::NUM_MOTORS; i++) {
+    const uint8_t duty = outputDuty(player, controller, i);
+    if (anyWritten && duty == written[i]) continue;
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(MOTOR_PINS[i], controller.duty(i));
+    ledcWrite(MOTOR_PINS[i], duty);
 #else
-    ledcWrite(i, controller.duty(i));
+    ledcWrite(i, duty);
 #endif
+    written[i] = duty;
   }
+  anyWritten = true;
+}
+
+static void playPattern(patterns::Id id, uint32_t now) { player.play(patterns::get(id), now); }
+
+// --- battery --------------------------------------------------------------
+
+static void serviceBattery(uint32_t now) {
+  if (now - lastBatteryCheckMs < BATTERY_CHECK_MS) return;
+  lastBatteryCheckMs = now;
+  uint32_t sumMv = 0;
+  for (uint8_t i = 0; i < BATTERY_SAMPLES; i++) sumMv += analogReadMilliVolts(BATTERY_PIN);
+  const uint32_t batteryMv = sumMv / BATTERY_SAMPLES * BATTERY_DIVIDER;
+  if (battery.update(static_cast<uint16_t>(batteryMv))) playPattern(patterns::LOW_BATTERY, now);
 }
 
 // --- links ----------------------------------------------------------------
@@ -61,7 +91,6 @@ static void serviceUsb(uint32_t now) {
   while (Serial.available() > 0) {
     if (!usbParser.feed((uint8_t)Serial.read())) continue;
     size_t n = controller.handleFrame(usbParser.frame, now, reply);
-    applyDuties();
     Serial.write(reply, n);
   }
 }
@@ -97,7 +126,6 @@ static void serviceWifi(uint32_t now) {
       if (!wifiParser.feed(packet[i])) continue;
       announcer.onLinkFrame(now);
       size_t n = controller.handleFrame(wifiParser.frame, now, reply);
-      applyDuties();
       sendUdp(fromIp, fromPort, reply, n);
     }
   }
@@ -123,11 +151,24 @@ void setup() {
   WiFi.setSleep(false);  // power saving can delay incoming commands by ~100 ms or more
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  const uint32_t now = millis();
+  playPattern(patterns::BOOT, now);
+  lastBatteryCheckMs = now;  // first battery check 1 s from now, after the boot pattern
 }
 
 void loop() {
   uint32_t now = millis();
   serviceUsb(now);
   serviceWifi(now);
-  if (controller.tick(now)) applyDuties();
+
+  uint8_t requested;
+  if (controller.takePatternRequest(requested)) {
+    playPattern(static_cast<patterns::Id>(requested), now);  // id already checked by the controller
+  }
+  if (controller.tick(now)) playPattern(patterns::LINK_LOST, now);  // watchdog fired
+  serviceBattery(now);
+
+  player.update(now);
+  applyDuties();
 }

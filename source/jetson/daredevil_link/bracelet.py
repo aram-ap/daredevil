@@ -70,6 +70,15 @@ class Bracelet:
     def heartbeat(self) -> int:
         return self.send(p.MSG_HEARTBEAT)
 
+    def play_pattern(self, pattern_id: int) -> int:
+        """Ask the bracelet to play one of its built-in patterns (p.PATTERN_*).
+
+        While it plays, the pattern overrides motor commands on the bracelet.
+        """
+        if pattern_id not in p.PATTERNS.values():
+            raise ValueError(f"unknown pattern id {pattern_id}; known: {p.PATTERNS}")
+        return self.send(p.MSG_PLAY_PATTERN, bytes([pattern_id]))
+
     def poll(self) -> List[p.Frame]:
         """Return any frames received so far, without blocking.
 

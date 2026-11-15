@@ -55,6 +55,36 @@ class ReceiveTest(unittest.TestCase):
             b.identify(timeout=0.05)
 
 
+class PatternTest(unittest.TestCase):
+    def test_pattern_ids_match_the_firmware(self):
+        # patterns.h uses the same numbers; changing one side breaks the other.
+        self.assertEqual((p.PATTERN_BOOT, p.PATTERN_LINK_LOST, p.PATTERN_LOW_BATTERY), (0, 1, 2))
+        self.assertEqual(
+            p.PATTERNS,
+            {"boot": p.PATTERN_BOOT, "link_lost": p.PATTERN_LINK_LOST, "low_battery": p.PATTERN_LOW_BATTERY},
+        )
+
+    def test_play_pattern_sends_one_frame(self):
+        t = FakeTransport()
+        Bracelet(t).play_pattern(p.PATTERN_LOW_BATTERY)
+        self.assertEqual(t.frames_written(), [p.Frame(p.MSG_PLAY_PATTERN, 0, bytes([p.PATTERN_LOW_BATTERY]))])
+
+    def test_play_pattern_rejects_unknown_ids_and_sends_nothing(self):
+        t = FakeTransport()
+        b = Bracelet(t)
+        for bad in (3, -1, 256):
+            with self.assertRaises(ValueError):
+                b.play_pattern(bad)
+        self.assertEqual(t.written, [])
+
+    def test_bracelet_acks_play_pattern(self):
+        fake = FakeBracelet()
+        b = Bracelet(FakeTransport(responder=fake))
+        seq = b.play_pattern(p.PATTERN_BOOT)
+        self.assertEqual(b.poll(), [p.Frame(p.MSG_ACK, seq, bytes([p.MSG_PLAY_PATTERN, p.STATUS_OK]))])
+        self.assertEqual(fake.patterns_played, [p.PATTERN_BOOT])
+
+
 class CloseTest(unittest.TestCase):
     def test_close_stops_motors_then_closes_transport(self):
         t = FakeTransport()

@@ -6,8 +6,9 @@ from daredevil_link import protocol as p
 class FakeBracelet:
     """Answers frames the way the firmware does.
 
-    SET_MOTORS and HEARTBEAT get an ACK, IDENTIFY gets an IDENTITY. Call it
-    with the bytes the Jetson wrote; it returns the bytes the bracelet replies.
+    SET_MOTORS, HEARTBEAT and PLAY_PATTERN get an ACK, IDENTIFY gets an
+    IDENTITY. Call it with the bytes the Jetson wrote; it returns the bytes the
+    bracelet replies.
     """
 
     def __init__(self, side=p.SIDE_LEFT, fw=(0, 1), num_motors=p.NUM_MOTORS):
@@ -15,6 +16,7 @@ class FakeBracelet:
         self.fw = fw
         self.num_motors = num_motors
         self.motors = [0] * num_motors
+        self.patterns_played = []
         self._parser = p.FrameParser()
         self._tx_seq = 0
 
@@ -34,6 +36,15 @@ class FakeBracelet:
                 reply += p.encode_frame(p.MSG_ACK, frame.seq, bytes([frame.type, p.STATUS_OK]))
             elif frame.type == p.MSG_IDENTIFY:
                 reply += self.identity_frame()
+            elif frame.type == p.MSG_PLAY_PATTERN:
+                if len(frame.payload) != 1:
+                    status = p.STATUS_BAD_LENGTH
+                elif frame.payload[0] not in p.PATTERNS.values():
+                    status = p.STATUS_BAD_ARGUMENT
+                else:
+                    status = p.STATUS_OK
+                    self.patterns_played.append(frame.payload[0])
+                reply += p.encode_frame(p.MSG_ACK, frame.seq, bytes([frame.type, status]))
         return reply
 
 
