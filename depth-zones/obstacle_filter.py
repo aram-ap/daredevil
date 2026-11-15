@@ -18,7 +18,7 @@ class ObstacleDepthFilter:
         cam_height_m: float = 1.35,
         floor_clearance_m: float = 0.10,
         ego_dist_m: float = 0.45,
-        ego_drop_m: float = 0.20,
+        ego_drop_m: float = 0.05,
     ):
 
         """
@@ -74,9 +74,12 @@ class ObstacleDepthFilter:
 
         # 3. Wall Preservation check: vertical walls have near-zero change in z_horiz
         # across a 5-pixel vertical step, whereas floors change distance rapidly.
-        dz_dv = np.zeros_like(z_horiz)
-        dz_dv[5:, :] = np.abs(z_horiz[5:, :] - z_horiz[:-5, :])
-        is_vertical_wall = (dz_dv < 0.06) & (depth_m > 0)
+        stride = 8
+        dz = np.zeros_like(z_horiz)
+        dy = np.zeros_like(y_down)
+        dz[stride:, :] = np.abs(z_horiz[stride:, :] - z_horiz[:-stride, :])
+        dy[stride:, :] = np.abs(y_down[stride:, :] - y_down[:-stride, :])
+        is_vertical_wall = (dy > 0.01) & (dz < 0.5 * dy) & (depth_m > 0)
 
         # 4. Identify floor pixels : near ground level AND not a vertical wall face
         floor_threshold = self.cam_height_m - self.floor_clearance_m
