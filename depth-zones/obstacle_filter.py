@@ -40,7 +40,7 @@ class ObstacleDepthFilter:
 
 
         # Precompute normalized vertical pixel coordinate column: (v - cy) / fy
-        v_coords = np.arrange(height, dtype=np.float32).reshape(-1,1)
+        v_coords = np.arange(height, dtype=np.float32).reshape(-1,1)
         self.v_norm = (v_coords - cy) / fy      # Shape : (H,1)
 
     def filter_frame(
