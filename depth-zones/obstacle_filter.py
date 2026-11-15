@@ -74,7 +74,7 @@ class ObstacleDepthFilter:
 
         # 3. Wall Preservation check: vertical walls have near-zero change in z_horiz
         # across a 5-pixel vertical step, whereas floors change distance rapidly.
-        dz_dv = np.zeroes_like(z_horiz)
+        dz_dv = np.zeros_like(z_horiz)
         dz_dv[5:, :] = np.abs(z_horiz[5:, :] - z_horiz[:-5, :])
         is_vertical_wall = (dz_dv < 0.06) & (depth_m > 0)
 
