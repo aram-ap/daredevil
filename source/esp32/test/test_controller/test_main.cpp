@@ -4,6 +4,7 @@
 #include <unity.h>
 
 #include "controller.h"
+#include "patterns.h"
 #include "protocol.h"
 
 using namespace proto;
@@ -135,6 +136,60 @@ void test_watchdog_survives_millis_wraparound() {
   TEST_ASSERT_FALSE(c.motorsActive());
 }
 
+// --- PLAY_PATTERN (0x04): the Jetson asks the bracelet to play a pattern ----
+
+void test_pattern_ids_match_the_python_side() {
+  // protocol.py uses the same numbers; changing one side breaks the other.
+  TEST_ASSERT_EQUAL(0, patterns::BOOT);
+  TEST_ASSERT_EQUAL(1, patterns::LINK_LOST);
+  TEST_ASSERT_EQUAL(2, patterns::LOW_BATTERY);
+}
+
+void test_play_pattern_requests_the_pattern_and_acks() {
+  Controller c(SIDE_RIGHT, 0, 1);
+  uint8_t out[MAX_FRAME];
+  const uint8_t lowBattery[1] = {patterns::LOW_BATTERY};
+  Frame reply = decodeReply(out, c.handleFrame(makeFrame(MSG_PLAY_PATTERN, 9, lowBattery, 1), 1000, out));
+
+  TEST_ASSERT_EQUAL_HEX8(MSG_ACK, reply.type);
+  TEST_ASSERT_EQUAL(9, reply.seq);
+  TEST_ASSERT_EQUAL_HEX8(MSG_PLAY_PATTERN, reply.payload[0]);
+  TEST_ASSERT_EQUAL_HEX8(STATUS_OK, reply.payload[1]);
+
+  uint8_t id = 0xFF;
+  TEST_ASSERT_TRUE(c.takePatternRequest(id));
+  TEST_ASSERT_EQUAL(patterns::LOW_BATTERY, id);
+  TEST_ASSERT_FALSE(c.takePatternRequest(id));  // handed out only once
+
+  // Playing a pattern is not a motor command: duties and watchdog state untouched.
+  for (uint8_t i = 0; i < 4; i++) TEST_ASSERT_EQUAL(0, c.duty(i));
+  TEST_ASSERT_FALSE(c.motorsActive());
+}
+
+void test_play_pattern_with_unknown_id_is_rejected() {
+  Controller c(SIDE_RIGHT, 0, 1);
+  uint8_t out[MAX_FRAME];
+  const uint8_t unknown[1] = {patterns::COUNT};  // one past the last pattern
+  Frame reply = decodeReply(out, c.handleFrame(makeFrame(MSG_PLAY_PATTERN, 3, unknown, 1), 1000, out));
+
+  TEST_ASSERT_EQUAL_HEX8(STATUS_BAD_ARGUMENT, reply.payload[1]);
+  uint8_t id;
+  TEST_ASSERT_FALSE(c.takePatternRequest(id));
+}
+
+void test_play_pattern_with_wrong_length_is_rejected() {
+  Controller c(SIDE_RIGHT, 0, 1);
+  uint8_t out[MAX_FRAME];
+  const uint8_t two[2] = {patterns::BOOT, 0};
+  uint8_t id;
+
+  Frame reply = decodeReply(out, c.handleFrame(makeFrame(MSG_PLAY_PATTERN, 1, nullptr, 0), 1000, out));
+  TEST_ASSERT_EQUAL_HEX8(STATUS_BAD_LENGTH, reply.payload[1]);
+  reply = decodeReply(out, c.handleFrame(makeFrame(MSG_PLAY_PATTERN, 2, two, 2), 1000, out));
+  TEST_ASSERT_EQUAL_HEX8(STATUS_BAD_LENGTH, reply.payload[1]);
+  TEST_ASSERT_FALSE(c.takePatternRequest(id));
+}
+
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_motors_start_off);
@@ -147,5 +202,9 @@ int main() {
   RUN_TEST(test_watchdog_turns_motors_off_after_500ms_of_silence);
   RUN_TEST(test_any_valid_frame_feeds_the_watchdog);
   RUN_TEST(test_watchdog_survives_millis_wraparound);
+  RUN_TEST(test_pattern_ids_match_the_python_side);
+  RUN_TEST(test_play_pattern_requests_the_pattern_and_acks);
+  RUN_TEST(test_play_pattern_with_unknown_id_is_rejected);
+  RUN_TEST(test_play_pattern_with_wrong_length_is_rejected);
   return UNITY_END();
 }

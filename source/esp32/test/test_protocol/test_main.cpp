@@ -41,6 +41,17 @@ void test_parser_decodes_python_frame() {
   TEST_ASSERT_EQUAL_HEX8(0x01, parser.frame.payload[0]);
 }
 
+void test_parser_decodes_python_play_pattern() {
+  // python: encode_frame(MSG_PLAY_PATTERN, 9, bytes([PATTERN_LOW_BATTERY]))
+  const uint8_t play[] = {0xAA, 0x55, 0x04, 0x09, 0x01, 0x02, 0x79};
+  Parser parser;
+  TEST_ASSERT_TRUE(feedAll(parser, play, sizeof(play)));
+  TEST_ASSERT_EQUAL_HEX8(MSG_PLAY_PATTERN, parser.frame.type);
+  TEST_ASSERT_EQUAL(9, parser.frame.seq);
+  TEST_ASSERT_EQUAL(1, parser.frame.len);
+  TEST_ASSERT_EQUAL(2, parser.frame.payload[0]);
+}
+
 void test_parser_rejects_bad_crc() {
   uint8_t frame[] = {0xAA, 0x55, 0x81, 0x07, 0x02, 0x01, 0x00, 0x54};
   frame[6] ^= 0xFF;
@@ -69,6 +80,7 @@ int main() {
   RUN_TEST(test_crc8_check_value);
   RUN_TEST(test_encode_matches_python_bytes);
   RUN_TEST(test_parser_decodes_python_frame);
+  RUN_TEST(test_parser_decodes_python_play_pattern);
   RUN_TEST(test_parser_rejects_bad_crc);
   RUN_TEST(test_reset_discards_truncated_datagram);
   return UNITY_END();

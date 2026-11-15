@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "patterns.h"
 #include "protocol.h"
 
 class Controller {
@@ -32,6 +33,13 @@ class Controller {
         return ack(f, proto::STATUS_OK, out);
       case proto::MSG_IDENTIFY:
         return identityFrame(out);
+      case proto::MSG_PLAY_PATTERN:
+        if (f.len != 1) return ack(f, proto::STATUS_BAD_LENGTH, out);
+        if (f.payload[0] >= patterns::COUNT) return ack(f, proto::STATUS_BAD_ARGUMENT, out);
+        // main.cpp owns the PatternPlayer; it collects this with takePatternRequest().
+        patternRequest_ = f.payload[0];
+        hasPatternRequest_ = true;
+        return ack(f, proto::STATUS_OK, out);
       default:
         return ack(f, proto::STATUS_UNKNOWN_TYPE, out);
     }
@@ -55,6 +63,15 @@ class Controller {
   uint8_t duty(uint8_t index) const { return index < proto::NUM_MOTORS ? duties_[index] : 0; }
   bool motorsActive() const { return active_; }
 
+  // If a PLAY_PATTERN arrived since the last call, put its id in `id` and
+  // return true. Each request is handed out once.
+  bool takePatternRequest(uint8_t &id) {
+    if (!hasPatternRequest_) return false;
+    id = patternRequest_;
+    hasPatternRequest_ = false;
+    return true;
+  }
+
  private:
   size_t ack(const proto::Frame &f, uint8_t status, uint8_t *out) {
     const uint8_t payload[2] = {f.type, status};
@@ -69,4 +86,6 @@ class Controller {
   bool active_ = false;
   uint32_t lastFrameMs_ = 0;
   uint8_t txSeq_ = 0;
+  bool hasPatternRequest_ = false;
+  uint8_t patternRequest_ = 0;
 };

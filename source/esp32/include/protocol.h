@@ -22,6 +22,7 @@ constexpr uint8_t NUM_MOTORS = 4;  // SET_MOTORS carries exactly this many bytes
 constexpr uint8_t MSG_SET_MOTORS = 0x01;  // payload: NUM_MOTORS intensities
 constexpr uint8_t MSG_HEARTBEAT = 0x02;   // payload: none
 constexpr uint8_t MSG_IDENTIFY = 0x03;    // payload: none
+constexpr uint8_t MSG_PLAY_PATTERN = 0x04;  // payload: [pattern_id] (ids in patterns.h)
 
 // ESP32 -> Jetson
 constexpr uint8_t MSG_ACK = 0x81;       // seq = echoed; payload: [acked_type, status]
@@ -30,6 +31,7 @@ constexpr uint8_t MSG_IDENTITY = 0x83;  // payload: [side, fw_major, fw_minor, n
 constexpr uint8_t STATUS_OK = 0x00;
 constexpr uint8_t STATUS_BAD_LENGTH = 0x01;
 constexpr uint8_t STATUS_UNKNOWN_TYPE = 0x02;
+constexpr uint8_t STATUS_BAD_ARGUMENT = 0x03;  // e.g. an unknown pattern id
 
 inline uint8_t crc8(const uint8_t *data, size_t len, uint8_t crc = 0) {
   for (size_t i = 0; i < len; i++) {
