@@ -17,7 +17,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from zone_depth import ZoneDepthPipeline
+from backup_zone_depth import ZoneDepthPipeline
 
 # Optional sibling/parent modules (graceful fallback if function names differ)
 try:
