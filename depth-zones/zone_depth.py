@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Tuple
 
+from obstacle_filter import ObstacleDepthFilter
+
 import cv2
 import numpy as np
 
