@@ -105,11 +105,14 @@ FRAME_HEIGHT = 480
 FPS          = 30
 WEB_PORT     = 8080
 
-# YOLO model weights: 'yolov8n.pt' (nano/fastest) → 'yolov8s/m/l/x.pt' for more accuracy
-YOLO_MODEL_WEIGHTS = "yolov8n.pt"
+# YOLO model weights: "yolo26n.pt" (nano/fastest) → 'yolo26s/m/l/x.pt' for more accuracy
+YOLO_MODEL_WEIGHTS = "yolo26n.pt"
 
 # Confidence threshold for YOLO detections
 CONF_THRESHOLD = 0.40
+
+# Enable YOLO26's native one-to-one head (bypasses NMS post-processing for faster edge inference)
+USE_END2END_NMS_FREE = True
 
 # Depth range of interest (meters)
 MIN_DIST_M = 0.3
@@ -302,7 +305,12 @@ def main():
             # -----------------------------------------------------------------
             # 2. Run YOLO inference
             # -----------------------------------------------------------------
-            results = model(color_image, conf=CONF_THRESHOLD, verbose=False)[0]
+            results = model(
+                color_image, 
+                conf=CONF_THRESHOLD, 
+                nms = not USE_END2END_NMS_FREE,
+                verbose=False
+            )[0]
 
             # -----------------------------------------------------------------
             # 3. Per-detection: get zone + depth
