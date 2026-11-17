@@ -1,0 +1,5 @@
+numpy
+opencv-python-headless   # for 'clip_tools.py video'
+pytest
+# pyrealsense2 is only needed to record or read a .bag (the Jetson needs a special build):
+# install it separately, see ../realsense-data-collection/README.md
