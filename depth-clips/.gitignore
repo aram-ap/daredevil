@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# recordings are large and stay on the machine that made them
+clips/*
+!clips/.gitkeep
