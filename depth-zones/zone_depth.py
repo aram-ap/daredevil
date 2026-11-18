@@ -282,7 +282,7 @@ class ZoneDetector:
         distances, valid = process_depth_frame(depth_m, ignore, min_pixels=min_pixels)
         self.last["valid"] = valid
         return distances
- 
+      
     
 # =======================================================================
 # 6. Coverage-gated zone distance extraction (Added in Task 1: OA-2-T-1)
