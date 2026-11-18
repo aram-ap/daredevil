@@ -282,3 +282,70 @@ class ZoneDetector:
         distances, valid = process_depth_frame(depth_m, ignore, min_pixels=min_pixels)
         self.last["valid"] = valid
         return distances
+
+
+# =======================================================================
+# 7. Per-zone multi-frame confirmation (Added in Task 2: OA-2-T-2)
+# =======================================================================
+class DirectionalZoneConfirm:
+    """Confirm obstacles per zone over N consecutive frames with M-frame dropout hysteresis."""
+
+    ZONES = ("left", "center", "right")
+
+    def __init__(self, confirm_frames: int = 3, clear_frames: int = 2) -> None:
+        if confirm_frames < 1 or clear_frames < 1:
+            raise ValueError("confirm_frames and clear_frames must be >= 1")
+        self.confirm_frames = confirm_frames
+        self.clear_frames = clear_frames
+        self._hit_counts: Dict[str, int] = {z: 0 for z in self.ZONES}
+        self._miss_counts: Dict[str, int] = {z: 0 for z in self.ZONES}
+        self._confirmed: Dict[str, bool] = {z: False for z in self.ZONES}
+        self._last_distance: Dict[str, Optional[float]] = {z: None for z in self.ZONES}
+
+    def reset(self, zone: Optional[str] = None) -> None:
+        """Reset confirmation state for all zones or a single named zone."""
+        if zone is None:
+            target_zones = self.ZONES
+        else:
+            if zone not in self.ZONES:
+                raise KeyError(f"Unknown zone: {zone}")
+            target_zones = (zone,)
+
+        for z in target_zones:
+            self._hit_counts[z] = 0
+            self._miss_counts[z] = 0
+            self._confirmed[z] = False
+            self._last_distance[z] = None
+
+    def update(self, raw_zones: Dict[str, Optional[float]]) -> Dict[str, Optional[float]]:
+        out: Dict[str, Optional[float]] = {}
+        for z in self.ZONES:
+            raw_val = raw_zones.get(z)
+            dist: Optional[float] = None
+            if raw_val is not None:
+                val = float(raw_val)
+                if np.isfinite(val) and val > 0.0:
+                    dist = val
+
+            if dist is not None:
+                self._hit_counts[z] += 1
+                self._miss_counts[z] = 0
+                self._last_distance[z] = dist
+                if self._hit_counts[z] >= self.confirm_frames:
+                    self._confirmed[z] = True
+                out[z] = self._last_distance[z] if self._confirmed[z] else None
+            else:
+                self._miss_counts[z] += 1
+                if self._confirmed[z]:
+                    if self._miss_counts[z] >= self.clear_frames:
+                        self._confirmed[z] = False
+                        self._hit_counts[z] = 0
+                        self._last_distance[z] = None
+                        out[z] = None
+                    else:
+                        out[z] = self._last_distance[z]
+                else:
+                    self._hit_counts[z] = 0
+                    self._last_distance[z] = None
+                    out[z] = None
+        return out
