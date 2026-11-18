@@ -282,3 +282,78 @@ class ZoneDetector:
         distances, valid = process_depth_frame(depth_m, ignore, min_pixels=min_pixels)
         self.last["valid"] = valid
         return distances
+ 
+    
+# =======================================================================
+# 6. Coverage-gated zone distance extraction (Added in Task 1: OA-2-T-1)
+# =======================================================================
+def extract_filtered_zone_distances(
+    depth_m: np.ndarray,
+    min_depth: float = MIN_DIST_METERS,
+    max_depth: float = MAX_DIST_METERS,
+    min_coverage_ratio: float = 0.08,
+) -> Dict[str, Optional[float]]:
+    """
+    Slice a 2D depth frame into 'left', 'center', and 'right' columns and 
+    compute each zone's nearest obstacle distance using a coverage-ratio guard.
+
+    Why this exists:
+- Resolution-independent noise rejection: instead of requiring a fixed pixel
+      count (like 50 pixels, which changes meaning when decimation or resolution 
+      changes), 'min_coverage_ratio=0.08' requires at least 8% of a zone's pixels
+      to contain valid obstacle readings within [min_depth, max_depth].
+- Outlier immunity: uses the 5-th percentile valid depth ('DEFAULT_PERCENTILE')
+      instead of 'min()' so a few stray close-range stereo speckle pixels cannot 
+      falsely trigger a close proximity alert.
+    """
+    # Convert input to a 64-bit float NumPt array for consistent percentile math
+    arr = np.asarray(depth_m, dtype=np.float64)
+
+    # Guard 1: Ensure the input is a 2D image (height, width) with at least 3 columns
+    # so that integer division (width // 3) gives every zone at least 1 pixel column.
+    if arr.ndim != 2 or arr.shape[1] < 3:
+        raise ValueError("depth_m must be a 2D array with width >= 3")
+
+    # Guard 2: Reject physically impossible depth windows or invalid coverage ratios
+    if min_depth <= 0.0 or min_depth >= max_depth or not (0.0 < min_coverage_ratio <= 1.0):
+        raise ValueError("invalid depth vounds or coverage ratio")
+
+    # Partition the frame widith horizontally into three vertical columns : 
+    # - left:       columns [0, W//3]
+    # - center:     columns [W//3, 2*(W//3))
+    # - right:      columns [2*(W//3), W)
+    _, width = arr.shape
+    third = width // 3
+    slices = {
+        "left": arr[:, :third],
+        "center": arr[:, third : 2 * third],
+        "right": arr[:, 2* third :],
+    }
+
+    result Dict[str, Optional[float]] = {}
+    for zone_name, zone_slice in slices.items():
+        total_pixels = zone_slice.size
+
+        # Build a boolean mask of valid obstacle readings:
+        # 1. np.isfinite() rejects NaN (no-reading holes) and +/-inf.
+        # 2. (zone_slice >= min_depth) & (zone_slice <= max_depth) restricts
+        #    detections to the active alert window (default 0.5 m to 3.0 m).
+        with np.errstate(invalid="ignore"):
+            valid_mask = (
+                np.isfinite(zone_slice)
+                & (zone_slice >= min_depth)
+                & (zone_slice <= max_depth)
+            )
+        valid_pixels = zone_slice[valid_mask]
+
+        # Coverage check: if fewer than `min_coverage_ratio` (e.g., 8%) of the pixels
+        # in this zone see a valid obstacle, treat it as sparse noise and return None.
+        if total_pixels == 0 or (valid_pixels.size / total_pixels) < min_coverage_ratio:
+            result[zone_name] = None
+        else:
+            # Report the 5th-percentile valid depth as the zone's nearest distance
+            # so isolated single-pixel low outliers do not skew the reading.
+            result[zone_name] = float(np.percentile(valid_pixels, DEFAULT_PERCENTILE))
+
+    return result
+    
