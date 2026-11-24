@@ -8,7 +8,8 @@ those announcements; one UDP datagram carries one frame.
 from __future__ import annotations
 
 import socket
-from typing import Dict, Tuple
+import time
+from typing import Callable, Dict, Set, Tuple
 
 from . import protocol as p
 from .bracelet import Bracelet, Identity
@@ -16,6 +17,10 @@ from .bracelet import Bracelet, Identity
 # PLACEHOLDER port -- must match the firmware.
 DEFAULT_PORT = 5005
 MAX_DATAGRAM = 512
+# Unlinked bracelets announce once a second. If a different IP claims a side
+# while the current owner announced less than this long ago, two boards were
+# flashed with the same side.
+CONFLICT_WINDOW_S = 3.0
 
 Address = Tuple[str, int]
 
@@ -48,12 +53,20 @@ class UdpTransport:
 
 
 class UdpHub:
-    def __init__(self, bind: Address = ("0.0.0.0", DEFAULT_PORT)) -> None:
+    def __init__(
+        self,
+        bind: Address = ("0.0.0.0", DEFAULT_PORT),
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._sock.bind(bind)
         self._sock.setblocking(False)
+        self._clock = clock
         self.bracelets: Dict[str, Bracelet] = {}
+        # side -> every IP seen claiming it at the same time (a setup mistake)
+        self.conflicts: Dict[str, Set[str]] = {}
         self._by_address: Dict[Address, UdpTransport] = {}
+        self._last_announce: Dict[str, float] = {}  # IP -> clock() of its last announcement
 
     @property
     def address(self) -> Address:
@@ -78,7 +91,10 @@ class UdpHub:
         transport = self._by_address.get(addr)
         if transport is not None:
             # Known bracelet: hand it everything, including IDENTITY replies
-            # that its identify() is waiting for.
+            # that its identify() is waiting for. Still note when it announced,
+            # so a second board claiming its side is seen as a conflict.
+            if any(f.type == p.MSG_IDENTITY for f in p.FrameParser().feed(data)):
+                self._last_announce[addr[0]] = self._clock()
             transport._deliver(data)
             return
         # Unknown address: only a valid announcement registers it; the
@@ -91,14 +107,27 @@ class UdpHub:
         name = identity.side_name
         if name == "unknown":
             return
+        now = self._clock()
+        ip = addr[0]
         existing = self.bracelets.get(name)
         if existing is None:
+            self._last_announce[ip] = now
             transport = UdpTransport(self, addr)
             self._by_address[addr] = transport
             self.bracelets[name] = Bracelet(transport, identity)
             return
-        # Same side announcing again, possibly from a new address after a reboot:
-        # keep the Bracelet object so code holding it keeps working.
+        owner_ip = existing.transport.address[0]
+        owner_seen = self._last_announce.get(owner_ip)
+        self._last_announce[ip] = now
+        if ip != owner_ip and owner_seen is not None and now - owner_seen < CONFLICT_WINDOW_S:
+            # Another board is announcing the same side while the owner is
+            # still announcing: two boards were flashed with the same side.
+            # Keep the first one so commands don't bounce between boards.
+            self.conflicts.setdefault(name, set()).update({owner_ip, ip})
+            return
+        # Same side announcing again, possibly from a new address after a reboot
+        # (same IP, new port) or a replaced board (old one went quiet): keep the
+        # Bracelet object so code holding it keeps working.
         transport = existing.transport
         self._by_address.pop(transport.address, None)
         transport.address = addr

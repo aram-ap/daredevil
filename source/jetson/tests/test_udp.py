@@ -105,5 +105,59 @@ class UdpHubTest(unittest.TestCase):
         self.assertEqual(self.received_frames(new_sock)[0].type, p.MSG_HEARTBEAT)
 
 
+class UdpHubConflictTest(unittest.TestCase):
+    """Two boards flashed with the same side must be reported, not silently swapped.
+
+    Localhost sockets all share 127.0.0.1, so these tests hand datagrams from
+    made-up hotspot addresses straight to the hub, with a fake clock.
+    """
+
+    def setUp(self):
+        self.now = 0.0
+        self.hub = UdpHub(("127.0.0.1", 0), clock=lambda: self.now)
+        self.addCleanup(self.hub.close)
+
+    def announce_at(self, t, ip, port, side):
+        self.now = t
+        self.hub._handle(FakeBracelet(side=side).identity_frame(), (ip, port))
+
+    def test_two_boards_claiming_the_same_side_are_reported(self):
+        self.announce_at(0.0, "10.42.0.10", 4000, p.SIDE_LEFT)
+        self.announce_at(0.5, "10.42.0.11", 4000, p.SIDE_LEFT)
+
+        self.assertEqual(self.hub.conflicts, {"left": {"10.42.0.10", "10.42.0.11"}})
+        # The first board keeps the "left" slot, so commands don't bounce between boards.
+        self.assertEqual(self.hub.peer_address("left"), ("10.42.0.10", 4000))
+
+    def test_owner_reannouncing_keeps_a_late_duplicate_a_conflict(self):
+        self.announce_at(0.0, "10.42.0.10", 4000, p.SIDE_LEFT)
+        self.announce_at(2.5, "10.42.0.10", 4000, p.SIDE_LEFT)  # owner still announcing
+        self.announce_at(5.0, "10.42.0.11", 4000, p.SIDE_LEFT)
+
+        self.assertEqual(self.hub.conflicts, {"left": {"10.42.0.10", "10.42.0.11"}})
+        self.assertEqual(self.hub.peer_address("left"), ("10.42.0.10", 4000))
+
+    def test_reboot_with_same_ip_and_new_port_is_not_a_conflict(self):
+        self.announce_at(0.0, "10.42.0.10", 4000, p.SIDE_LEFT)
+        self.announce_at(0.5, "10.42.0.10", 4001, p.SIDE_LEFT)
+
+        self.assertEqual(self.hub.conflicts, {})
+        self.assertEqual(self.hub.peer_address("left"), ("10.42.0.10", 4001))
+
+    def test_new_ip_after_the_old_board_went_quiet_replaces_it(self):
+        self.announce_at(0.0, "10.42.0.10", 4000, p.SIDE_LEFT)
+        self.announce_at(10.0, "10.42.0.11", 4000, p.SIDE_LEFT)
+
+        self.assertEqual(self.hub.conflicts, {})
+        self.assertEqual(self.hub.peer_address("left"), ("10.42.0.11", 4000))
+
+    def test_left_and_right_on_different_ips_are_not_a_conflict(self):
+        self.announce_at(0.0, "10.42.0.10", 4000, p.SIDE_LEFT)
+        self.announce_at(0.5, "10.42.0.11", 4000, p.SIDE_RIGHT)
+
+        self.assertEqual(self.hub.conflicts, {})
+        self.assertEqual(set(self.hub.bracelets), {"left", "right"})
+
+
 if __name__ == "__main__":
     unittest.main()
